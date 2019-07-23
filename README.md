@@ -1,4 +1,9 @@
 # TEST LINC DEPLOY
-The quick brown fox jumped over the lazy dog
+Code base to test AI for earth deployment
+
+Questions:
+How to return images from the AI platform?
+How to test the Docker file with API locally?
+
 ## Download the model
-If using jupyter notebook you need to download th emodel
+If using jupyter notebook you need to download the model

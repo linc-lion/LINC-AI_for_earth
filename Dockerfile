@@ -5,12 +5,25 @@ RUN echo "source activate ai4e_py_api" >> ~/.bashrc \
     && conda install -c conda-forge -n ai4e_py_api numpy pandas
     
 RUN /usr/local/envs/ai4e_py_api/bin/pip install --upgrade pip
-RUN /usr/local/envs/ai4e_py_api/bin/pip install tensorflow==1.9 pillow requests_toolbelt
+#RUN /usr/local/envs/ai4e_py_api/bin/pip install 
+
+###
+#Need verification on below using pipfile to install dep, replaces
+#requirments.txt
+
+# Copy Pipfile
+#COPY ./Linc_deploy/Pipfile /app/Linc_deploy
+
+# Install dependencies
+#COPY Pipfile Pipfile.lock /app/Linc_deploy
+#RUN pip install pipenv && pipenv install --system
 
 # Note: supervisor.conf reflects the location and name of your api code.
-COPY ./supervisord.conf /etc/supervisord.conf
+#COPY ./supervisord.conf /etc/supervisord.conf
+###
+
 # startup.sh is a helper script
-COPY ./startup.sh /
+#COPY ./startup.sh /
 RUN chmod +x /startup.sh
 
 # Copy your API code

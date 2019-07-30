@@ -10,7 +10,7 @@ from os import getenv
 from datetime import datetime
 
 # import our base code
-from predict_AI.py import LINC_detector
+from predict_AI import LINC_detector
 
 print('Creating Application')
 

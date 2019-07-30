@@ -1,0 +1,2 @@
+az acr login --name lincaiforearth
+az container attach --resource-group LincTesting --name acr-tasks

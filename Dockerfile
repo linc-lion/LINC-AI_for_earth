@@ -3,8 +3,11 @@ FROM mcr.microsoft.com/aiforearth/base-py:1.8-cuda-9.0-runtime
 
 # Note: supervisor.conf reflects the location and name of your api code.
 COPY ./supervisord.conf /etc/supervisord.conf
+###
+
 # startup.sh is a helper script
 COPY ./startup.sh /
+
 # Copy your API code
 COPY ./Linc_deploy /app/Linc_deploy/
 

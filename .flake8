@@ -1,0 +1,4 @@
+[flake8]
+ignore = E501,E251,E231,E265,W291,E302,W291,E722,E261
+exclude = .git,__pycache__
+max-complexity = 10

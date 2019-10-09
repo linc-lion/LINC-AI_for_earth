@@ -9,13 +9,9 @@ from ai4e_service import APIService
 from os import getenv
 from datetime import datetime
 from tempfile import SpooledTemporaryFile
-
-
-# import our base code
 from predict_AI import LINC_detector
 
 print('Creating Application')
-
 app = Flask(__name__)
 
 # Use the AI4EAppInsights library to send log messages. NOT REQURIED
@@ -26,61 +22,97 @@ log = AI4EAppInsights()
 with app.app_context():
     ai4e_service = APIService(app, log)
 
-# Load LINC model
-LINC = LINC_detector(getenv('MODEL_PATH'),cpu=True)
+# Load LINC models
+LINC_Lion = LINC_detector(getenv('LION_MODEL_PATH'),cpu=True)
+LINC_Whisker = LINC_detector(getenv('WHISKER_MODEL_PATH'),cpu=True)
+print("LABEL_NAMES",LINC_Lion.label_names)
 
-# Define a function for processing request data, if appliciable.  This function loads data or files into
-# a dictionary for access in your API function.  We pass this function as a parameter to your API setup.
-#return_values passed to **kwargs
-def process_request_data(request):
-    return_values = {'detection_confidence': float(getenv('DEFAULT_DETECTION_CONFIDENCE'))}
-    """
+#Helper
+class File_Error(Exception):
+    def __init__(self, arg):
+        self.strerror = arg
+        self.args = {arg}
+
+class Param_Error(Exception):
+    def __init__(self, arg):
+        self.strerror = arg
+        self.args = {arg}
+
+
+# Define a function for processing request data,
+# This function is passed as a param to API setup.
+# Return_values passed to **kwargs
+def process_request_data(requests):
+    image_error = """
+    File count error. 
+    Maximum image count: {},
+    Min image count 1
+    """.format(str(getenv('MAX_IMAGES_ACCEPTED')))
+
+    conf_error = """
+    Detection confidence needs 
+    to be between 0.0 and 1.0."""
+
+    return_values = {'images': None}
     try:
-        # Attempt to load file
-        images, image_names = [], []
-        for k, the_file in request.files.items():
-            print(the_file.content_type)
-            # file of type SpooledTemporaryFile has attributes content_type and a read() method
-            images.append(the_file)
-            image_names.append(k)
-            
-        return_values['images'] = images
-        return_values['image_names'] = image_names
-        args = request.args
-    except:
-        log.log_error('Unable to load the request data')   # Log to Application Insights
-
-    if len(images) > int(getenv('MAX_IMAGES_ACCEPTED')):
-        abort(413, 'Too many images. Maximum number of images that can be processed in one call is {}.'.format(str(getenv('MAX_IMAGES_ACCEPTED'))))
-
-    if 'confidence' in args:
-        detection_confidence = float(args['confidence'])
-        print('runserver, post_detect_sync, detection confidence: ', detection_confidence)
-        if detection_confidence < 0.0 or detection_confidence > 1.0:
-            abort(400, 'Detection confidence {} is invalid. Needs to be between 0.0 and 1.0.'.format(detection_confidence))
+        # Check 'conf'(confidence) param
+        args = requests.args
+        if 'conf' in args: 
+            detection_confidence = float(args['conf'])
+            if detection_confidence < 0.0 or detection_confidence > 1.0:
+                raise Param_Error("Bad conf number")# Throw 400 bad parameter
+            else:
+                return_values['conf'] = detection_confidence 
         else:
-            return_values['detection_confidence'] = detection_confidence
-    """
-    return_values = {'image': None}
-    try:
-        # Make anon-file object
-        temp = SpooledTemporaryFile()
-        temp.write(request.files['file'].read())
-        return_values['image'] = temp
-    except:
-        print("error")
+            return_values['conf'] = float(getenv('DEFAULT_DETECTION_CONFIDENCE'))
+        
+        # Check num images
+        temp_files = []
+        temp_names = []
+        num_files = len(requests.files)
+        max_img = int(getenv('MAX_IMAGES_ACCEPTED'))
+        print('MaxImg:', getenv('MAX_IMAGES_ACCEPTED'))
+        print('NumImages:', len(requests.files))
+        if num_files > max_img or num_files < 1: # Throw 413 too many files
+            raise File_Error("File count error")
+        for f_key, the_file in requests.files.items():
+            fType = the_file.filename.lower()
+            if not fType.endswith(('.jpeg','.jpg','.png')):
+                print('file error')             # Throw 415 format error
+                abort(415,"File error, .jpg, .jpeg or .png only")
+            # Make anon-file 
+            temp = SpooledTemporaryFile()
+            temp.write(request.files[f_key].read())
+            temp_files.append(temp)
+            temp_names.append(f_key)
+ 
+        return_values['images'] = temp_files
+        return_values['inames'] = temp_names
+
+        #DEBUG
+        for key,value in args.items():
+            print("Param:{}={}".format(key,value))
+        n_files = len(requests.files)       
+        print("number_files:",n_files)
+        print("conf: ", return_values['conf'])
+    
+    except Param_Error:
+        abort(400,conf_error)
+        log.log_error('Unable to load the request data')   # Log to Application Insights
+    except File_Error:
+        abort(413, image_error)
         log.log_error('Unable to load the request data')   # Log to Application Insights
     return return_values    
 
 
 # POST, long-running/async API endpoint example
 @ai4e_service.api_async_func(
-    api_path = '/detect', 
+    api_path = '/detect_async', 
     methods = ['POST'], 
     request_processing_function = process_request_data, # This is the data process function that you created above.
     maximum_concurrent_requests = 5, # If the number of requests exceed this limit, a 503 is returned to the caller.
     content_types = ['image/png', 'application/octet-stream', 'image/jpeg'],
-    content_max_length = (5 * 8) * 1000000,  # 5MB per image * number of images allowed
+    #content_max_length = 5 * 8 * 1000000,  # 5MB per image * number of images allowed
     trace_name = 'post:post_detect_async')
 def default_post(*args, **kwargs):
     # Since this is an async function, we need to keep the task updated.
@@ -88,27 +120,17 @@ def default_post(*args, **kwargs):
     log.log_debug('Started task', taskId) # Log to Application Insights
     ai4e_service.api_task_manager.UpdateTaskStatus(taskId, 'running - default_post')
 
-    # Get the data from the dictionary key that you assigned in your process_request_data function.
-    detection_confidence =.8 # kwargs.get('detection_confidence')
-    """
-    images = kwargs.get('images')
-    image_names = kwargs.get('image_names')
-    """
-    # testing
-    #image = "Images/good1.jpg"
-
-    image = kwargs.get('image')
-    images = [image]    # Back compat
-    image_names = ['LINC_detect']
-    print(type(image))
-    print(image)
-
+    # Get data from process_request_data
+    image_files = kwargs.get('images')
+    image_names = kwargs.get('inames')
+    detection_confidence = kwargs.get('conf')
+    print("Recieved data:")
+    print(image_files, image_names, detection_confidence)
     try:
-        print('runserver, post_detect_sync, batching and inferencing...')
         ai4e_service.api_task_manager.UpdateTaskStatus(taskId, 'running - batching and inferencing')
         
         tic = datetime.now()
-        result = LINC.detect(images, image_names, detection_confidence)
+        result = LINC_Lion.detect(image_files, image_names, detection_confidence)
         toc = datetime.now()
         
         inference_duration = toc - tic
@@ -123,28 +145,115 @@ def default_post(*args, **kwargs):
     # Update the task with a completion event.
     ai4e_service.api_task_manager.CompleteTask(taskId, json.dumps(result)) 
 
-
-# GET, sync API endpoint example
+# POST, Blocking
 @ai4e_service.api_sync_func(
-        api_path = '/classes', 
-        methods = ['GET'], 
-        maximum_concurrent_requests = 1000, 
-        trace_name = 'get:get_classes')
-def get_model_version(*args, **kwargs):
+    api_path = '/detect_lion', 
+    methods = ['POST'], 
+    content_types = ['image/png', 'application/octet-stream', 'image/jpeg'],
+    #content_max_length = 5 * 8 * 1000000,  # 5MB per image * number of images allowed
+    request_processing_function = process_request_data, # This is the data process function that you created above.
+    maximum_concurrent_requests = 5, 
+    trace_name = 'post:detect_lion')
+def get_detect_lion(*args, **kwargs):
+    # Get data from process_request_data
+    image_files = kwargs.get('images')
+    image_names = kwargs.get('inames')
+    detection_confidence = kwargs.get('conf')
+    print("Recieved data:")
+    print(image_files, image_names, detection_confidence)
+    try:
+        print('runserver, post_detect_sync, batching and inferencing...')
+        tic = datetime.now()
+        result = LINC_Lion.detect(image_files, image_names, detection_confidence)
+        toc = datetime.now()
+        
+        inference_duration = toc - tic
+        print('runserver, post_detect_sync, inference duration: {} seconds.'.format(inference_duration))
+    except Exception as e:
+        print('Error performing detection on the images: ' + str(e))
+        log.log_exception('Error performing detection on the images: ' + str(e))
+        return -1 
+    return json.dumps(result)
+
+# POST, Blocking
+@ai4e_service.api_sync_func(
+    api_path = '/detect_whisker', 
+    methods = ['POST'], 
+    maximum_concurrent_requests = 5, 
+    content_types = ['image/png', 'application/octet-stream', 'image/jpeg'],
+    content_max_length = 5 * 8 * 1000000,  # 5MB per image * number of images allowed
+    request_processing_function = process_request_data, # This is the data process function that you created above.
+    trace_name = 'get:get_classes')
+def detect_whisker(*args, **kwargs):
+    image_files = kwargs.get('images')
+    image_names = kwargs.get('inames')
+    detection_confidence = kwargs.get('conf')
+    print("Recieved data:")
+    print(image_files, image_names, detection_confidence)
+    try:
+        print('runserver, post_detect_sync, batching and inferencing...')
+        tic = datetime.now()
+        result = LINC_Whisker.detect(image_files, image_names, detection_confidence)
+        toc = datetime.now()
+        
+        inference_duration = toc - tic
+        print('runserver, post_detect_sync, inference duration: {} seconds.'.format(inference_duration))
+    except Exception as e:
+        print('Error performing detection on the images: ' + str(e))
+        log.log_exception('Error performing detection on the images: ' + str(e))
+        return -1 
+    return json.dumps(result)
+
+
+@ai4e_service.api_sync_func(
+    api_path = '/classes', 
+    methods = ['GET'],
+    maximum_concurrent_requests = 1000, 
+    trace_name = 'get:classes')
+def get_classes(*args, **kwargs):
     classes = {
-            "01":"cv-front", 
-            "02":"cv-dl"    
-            }
-    return 'Model version unknown.'
+        "1":"cv-dl",
+        "2":"cv-dr",
+        "3":"cv-f",
+        "4":"cv-sl",
+        "5":"cv-sr",
+        "6":"ear-dl-l",
+        "7":"ear-dl-r",
+        "8":"ear-dr-l",
+        "9":"ear-dr-r",
+        "10":"ear-fl",
+        "11":"ear-fr",
+        "12":"ear-sl",
+        "13":"ear-sr",
+        "14":"eye-dl-l",
+        "15":"eye-dl-r",
+        "16":"eye-dr-l",
+        "17":"eye-dr-r",
+        "18":"eye-fl",
+        "19":"eye-fr",
+        "20":"eye-sl",
+        "21":"eye-sr",
+        "22":"nose-dl",
+        "23":"nose-dr",
+        "24":"nose-f",
+        "25":"nose-sl",
+        "26":"nose-sr",
+        "27":"whisker-dl",
+        "28":"whisker-dr",
+        "29":"whisker-f",
+        "30":"whisker-sl",
+        "31":"whisker-sr",
+    }
+
+    return json.dumps(classes)
 
 @ai4e_service.api_sync_func(
-    api_path = '/linc_test', 
+    api_path = '/linc_test_me', 
     methods = ['GET'],
     maximum_concurrent_requests = 1000, 
     trace_name = 'get:linc_test')
 def hello(*args, **kwargs):
-    return "Hello World!"
-
+    return "!..........!"
 
 
 if __name__ == '__main__':

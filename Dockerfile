@@ -25,16 +25,18 @@ ENV APPINSIGHTS_INSTRUMENTATIONKEY= \
 # The following variables will allow you to filter logs in AppInsights \ 
     SERVICE_OWNER=AI4E_Test \
     SERVICE_CLUSTER=Local\ Docker \
-    SERVICE_MODEL_NAME=base-py\ example \
+    SERVICE_MODEL_NAME=LINC\ API \
     SERVICE_MODEL_FRAMEWORK=Python \
     SERVICE_MODEL_FRAMEOWRK_VERSION=3.6.6 \
     ENVSERVICE_MODEL_VERSION=1.0 \
     API_PREFIX=/LINC \
-    MODEL_PATH=/app/Linc_deploy/Models/body_parts.pth \
+    LION_MODEL_PATH=/app/Linc_deploy/Models/body_parts.pth \
+	WHISKER_MODEL_PATH=/app/Linc_deploy/Models/whiskers.pth \ 
     MODEL_VERSION=fasterrcnn_resnet50_fpn \ 
-    MAX_IMAGES_ACCEPTED=3 \ 
+    MAX_IMAGES_ACCEPTED=2 \ 
     GPU_BATCH_SIZE=8 \ 
-    DEFAULT_DETECTION_CONFIDENCE=0.5
+    DEFAULT_DETECTION_CONFIDENCE=0.7
+
 
 # Expose the port that is to be used when calling your API
 EXPOSE 3003

@@ -40,7 +40,7 @@ class LINC_detector():
     def detect(self, image_paths, image_names, conf_threshold):
         with torch.no_grad():
             
-            image_dicts = []
+            #image_dicts = [] # Adds top list container
             for image_path, image_name in zip(image_paths, image_names):
 
                 print('Loading image... ', end='', flush=True)
@@ -65,13 +65,14 @@ class LINC_detector():
                             'class': int(label), 
                             'ROI': box.tolist()
                         })
-                if type(image_path) != SpooledTemporaryFile:# Check for path
+                # Check for real path
+                if type(image_path) != SpooledTemporaryFile:
                     image_dict['path'] = image_path
                 image_dict['name'] = image_name
-                image_dicts.append(image_dict)
+               # image_dicts.append(image_dict) # Adds top list container
                 print('Done.')
-        print(json.dumps(image_dicts))
-        return image_dicts
+        print(json.dumps(image_dict))
+        return image_dict
 
 
 if __name__ == '__main__':

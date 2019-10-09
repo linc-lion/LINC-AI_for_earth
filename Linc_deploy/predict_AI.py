@@ -1,9 +1,11 @@
 import time
+import io
 import torch
 from PIL import Image
 import torchvision
 from utils import draw_boxes
 import json
+from tempfile import SpooledTemporaryFile # To compare path for Jsonization
 draw_confidence_threshold = 0.5
 
 to_tensor = torchvision.transforms.ToTensor()
@@ -63,12 +65,14 @@ class LINC_detector():
                             'class': int(label), 
                             'ROI': box.tolist()
                         })
-                image_dict['path'] = image_path
+                if type(image_path) != SpooledTemporaryFile:# Check for path
+                    image_dict['path'] = image_path
                 image_dict['name'] = image_name
                 image_dicts.append(image_dict)
                 print('Done.')
-        # print(json.dumps(image_dicts))
+        print(json.dumps(image_dicts))
         return image_dicts
+
 
 if __name__ == '__main__':
     # Test
@@ -80,6 +84,3 @@ if __name__ == '__main__':
     LINC = LINC_detector(model_path, True)
     # detect images
     LINC.detect(image_paths, image_names, conf_threshold)
-
-
-

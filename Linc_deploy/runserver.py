@@ -8,6 +8,8 @@ from ai4e_app_insights_wrapper import AI4EAppInsights
 from ai4e_service import APIService
 from os import getenv
 from datetime import datetime
+from tempfile import SpooledTemporaryFile
+
 
 # import our base code
 from predict_AI import LINC_detector
@@ -32,13 +34,14 @@ LINC = LINC_detector(getenv('MODEL_PATH'),cpu=True)
 #return_values passed to **kwargs
 def process_request_data(request):
     return_values = {'detection_confidence': float(getenv('DEFAULT_DETECTION_CONFIDENCE'))}
+    """
     try:
-        # Attempt to load the files
+        # Attempt to load file
         images, image_names = [], []
-        for k, file in request.files.items():
-            print(file.content_type)
+        for k, the_file in request.files.items():
+            print(the_file.content_type)
             # file of type SpooledTemporaryFile has attributes content_type and a read() method
-            images.append(file)
+            images.append(the_file)
             image_names.append(k)
             
         return_values['images'] = images
@@ -57,8 +60,17 @@ def process_request_data(request):
             abort(400, 'Detection confidence {} is invalid. Needs to be between 0.0 and 1.0.'.format(detection_confidence))
         else:
             return_values['detection_confidence'] = detection_confidence
-
-    return return_values
+    """
+    return_values = {'image': None}
+    try:
+        # Make anon-file object
+        temp = SpooledTemporaryFile()
+        temp.write(request.files['file'].read())
+        return_values['image'] = temp
+    except:
+        print("error")
+        log.log_error('Unable to load the request data')   # Log to Application Insights
+    return return_values    
 
 
 # POST, long-running/async API endpoint example
@@ -77,20 +89,28 @@ def default_post(*args, **kwargs):
     ai4e_service.api_task_manager.UpdateTaskStatus(taskId, 'running - default_post')
 
     # Get the data from the dictionary key that you assigned in your process_request_data function.
-    detection_confidence = kwargs.get('detection_confidence')
+    detection_confidence =.8 # kwargs.get('detection_confidence')
+    """
     images = kwargs.get('images')
     image_names = kwargs.get('image_names')
+    """
+    # testing
+    #image = "Images/good1.jpg"
+
+    image = kwargs.get('image')
+    images = [image]    # Back compat
+    image_names = ['LINC_detect']
+    print(type(image))
+    print(image)
 
     try:
         print('runserver, post_detect_sync, batching and inferencing...')
         ai4e_service.api_task_manager.UpdateTaskStatus(taskId, 'running - batching and inferencing')
-        # detections is an array of dicts
+        
         tic = datetime.now()
-
         result = LINC.detect(images, image_names, detection_confidence)
-
-        #detections = generate_detections_batch(images)
         toc = datetime.now()
+        
         inference_duration = toc - tic
         print('runserver, post_detect_sync, inference duration: {} seconds.'.format(inference_duration))
     except Exception as e:
@@ -98,31 +118,24 @@ def default_post(*args, **kwargs):
         log.log_exception('Error performing detection on the images: ' + str(e))
         ai4e_service.api_task_manager.FailTask(taskId, 'Task failed - ' + 'Error performing detection on the images: ' + str(e))
         return -1
-    """#NOT NEEDED NOW
-    # filter the detections by the confidence threshold
-    ai4e_service.api_task_manager.UpdateTaskStatus(taskId, 'returning - filtering')
-    try:
-    except Exception as e:
-        print('Error consolidating the detection boxes: ' + str(e))
-        log.log_exception('Error consolidating the detection boxes: ' + str(e))
-        ai4e_service.api_task_manager.FailTask('Error consolidating the detection boxes: ' + str(e))
-    """
-    # Once complete, ensure the status is updated.
+        # Once complete, ensure the status is updated.
     log.log_debug('Completed task', taskId) # Log to Application Insights
     # Update the task with a completion event.
-    ai4e_service.api_task_manager.CompleteTask(taskId, 'completed - ' + json.dumps(result))
+    ai4e_service.api_task_manager.CompleteTask(taskId, json.dumps(result)) 
+
 
 # GET, sync API endpoint example
 @ai4e_service.api_sync_func(
-        api_path = '/model_version', 
+        api_path = '/classes', 
         methods = ['GET'], 
         maximum_concurrent_requests = 1000, 
-        trace_name = 'get:get_model_version')
+        trace_name = 'get:get_classes')
 def get_model_version(*args, **kwargs):
-    try:
-        return getenv('MODEL_VERSION')
-    except:
-        return 'Model version unknown.'
+    classes = {
+            "01":"cv-front", 
+            "02":"cv-dl"    
+            }
+    return 'Model version unknown.'
 
 @ai4e_service.api_sync_func(
     api_path = '/linc_test', 

@@ -1,4 +1,4 @@
-#LINC DEPLOY FOR AZURE
+# LINC DEPLOY FOR AZURE
 Code base to test AI for earth deployment
 
 ## Download the model

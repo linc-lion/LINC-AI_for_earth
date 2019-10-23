@@ -30,13 +30,14 @@ ENV APPINSIGHTS_INSTRUMENTATIONKEY= \
     SERVICE_MODEL_FRAMEOWRK_VERSION=3.6.6 \
     ENVSERVICE_MODEL_VERSION=1.0 \
     API_PREFIX=/LINC \
-    LION_MODEL_PATH=/app/Linc_deploy/Models/body_parts.pth \
-	WHISKER_MODEL_PATH=/app/Linc_deploy/Models/whiskers.pth \ 
+    LION_MODEL_PATH=/app/Linc_deploy/DeployModels/body_parts_1.pth \
+	WHISKER_MODEL_PATH=/app/Linc_deploy/DeployModels/whiskers_1.pth \ 
     MODEL_VERSION=fasterrcnn_resnet50_fpn \ 
     MAX_IMAGES_ACCEPTED=2 \ 
     GPU_BATCH_SIZE=8 \ 
-    DEFAULT_DETECTION_CONFIDENCE=0.7
-
+    DEFAULT_DETECTION_CONFIDENCE=0.7 \
+	CUDA_SUPPORT=False
+	# CUDA_SUPPORT gets a True/Flase with capital
 
 # Expose the port that is to be used when calling your API
 EXPOSE 3003

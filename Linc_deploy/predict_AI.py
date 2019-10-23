@@ -3,7 +3,7 @@ import io
 import torch
 from PIL import Image
 import torchvision
-from utils import draw_boxes
+from models import detection
 import json
 from tempfile import SpooledTemporaryFile # To compare path for Jsonization
 draw_confidence_threshold = 0.5
@@ -16,31 +16,28 @@ class LINC_detector():
     def __init__(self, model_path, cpu = False):
 
         print('Loading checkpoint from hardrive... ', end='', flush=True)
-        print(cpu)
+        print(f"CPU={cpu}")
         self.model = self.load_model(model_path, cpu)
-        # print(self.model)
         print('Init done.')
 
     def load_model(self, model_path, cpu):
-        print(cpu)
         self.device = 'cuda' if torch.has_cuda and not cpu else 'cpu'
         print(f"Running inference on {self.device} device")
         print('Building model and loading checkpoint into it... ', end='', flush=True)
         checkpoint = torch.load(model_path, map_location=self.device)
         self.label_names = checkpoint['label_names']
-        model = torchvision.models.detection.fasterrcnn_resnet50_fpn(
+        model = detection.fasterrcnn_resnet50_fpn(
             num_classes=len(self.label_names) + 1, pretrained_backbone=False
         )
         model.to(self.device)
         model.load_state_dict(checkpoint['model'])
-        model = model.eval()
+        the_model = model.eval()
         print('Load done.')
-        return model
+        return the_model
     
     def detect(self, image_paths, image_names, conf_threshold):
         with torch.no_grad():
             
-            #image_dicts = [] # Adds top list container
             for image_path, image_name in zip(image_paths, image_names):
 
                 print('Loading image... ', end='', flush=True)
@@ -69,7 +66,6 @@ class LINC_detector():
                 if type(image_path) != SpooledTemporaryFile:
                     image_dict['path'] = image_path
                 image_dict['name'] = image_name
-               # image_dicts.append(image_dict) # Adds top list container
                 print('Done.')
         print(json.dumps(image_dict))
         return image_dict
@@ -77,11 +73,17 @@ class LINC_detector():
 
 if __name__ == '__main__':
     # Test
-    image_paths = ['Images/good1.jpg', 'Images/good2.jpg', 'Images/bad1.jpg']
-    image_names = ['good1.jpg', 'good2.jpg', 'bad1.jpg']
-    model_path = "Models/body_parts_0_0_1.pth" 
+    image_paths = ['Images/fourLions.jpeg']
+    image_names = ['image1.jpg']
+    model_path = "DeployModels/body_parts.pth"
     conf_threshold = 0.5
     # load model
     LINC = LINC_detector(model_path, True)
     # detect images
-    LINC.detect(image_paths, image_names, conf_threshold)
+    results = LINC.detect(image_paths, image_names, conf_threshold)
+    # draw images
+    # image = open(image_paths[0], 'rb')    
+    # draw_boxes(image, results)
+
+
+

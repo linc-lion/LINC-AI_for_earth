@@ -23,8 +23,9 @@ with app.app_context():
     ai4e_service = APIService(app, log)
 
 # Load LINC models
-LINC_Lion = LINC_detector(getenv('LION_MODEL_PATH'),cpu=True)
-LINC_Whisker = LINC_detector(getenv('WHISKER_MODEL_PATH'),cpu=True)
+cuda_support = getenv('CUDA_SUPPORT')   # Either CUDA or normal cpu
+LINC_Lion = LINC_detector(getenv('LION_MODEL_PATH'),cpu=cuda_support)
+LINC_Whisker = LINC_detector(getenv('WHISKER_MODEL_PATH'),cpu=cuda_support)
 print("LABEL_NAMES",LINC_Lion.label_names)
 
 #Helper
@@ -104,46 +105,6 @@ def process_request_data(requests):
         log.log_error('Unable to load the request data')   # Log to Application Insights
     return return_values    
 
-
-# POST, long-running/async API endpoint example
-@ai4e_service.api_async_func(
-    api_path = '/detect_async', 
-    methods = ['POST'], 
-    request_processing_function = process_request_data, # This is the data process function that you created above.
-    maximum_concurrent_requests = 5, # If the number of requests exceed this limit, a 503 is returned to the caller.
-    content_types = ['image/png', 'application/octet-stream', 'image/jpeg'],
-    #content_max_length = 5 * 8 * 1000000,  # 5MB per image * number of images allowed
-    trace_name = 'post:post_detect_async')
-def default_post(*args, **kwargs):
-    # Since this is an async function, we need to keep the task updated.
-    taskId = kwargs.get('taskId')
-    log.log_debug('Started task', taskId) # Log to Application Insights
-    ai4e_service.api_task_manager.UpdateTaskStatus(taskId, 'running - default_post')
-
-    # Get data from process_request_data
-    image_files = kwargs.get('images')
-    image_names = kwargs.get('inames')
-    detection_confidence = kwargs.get('conf')
-    print("Recieved data:")
-    print(image_files, image_names, detection_confidence)
-    try:
-        ai4e_service.api_task_manager.UpdateTaskStatus(taskId, 'running - batching and inferencing')
-        
-        tic = datetime.now()
-        result = LINC_Lion.detect(image_files, image_names, detection_confidence)
-        toc = datetime.now()
-        
-        inference_duration = toc - tic
-        print('runserver, post_detect_sync, inference duration: {} seconds.'.format(inference_duration))
-    except Exception as e:
-        print('Error performing detection on the images: ' + str(e))
-        log.log_exception('Error performing detection on the images: ' + str(e))
-        ai4e_service.api_task_manager.FailTask(taskId, 'Task failed - ' + 'Error performing detection on the images: ' + str(e))
-        return -1
-        # Once complete, ensure the status is updated.
-    log.log_debug('Completed task', taskId) # Log to Application Insights
-    # Update the task with a completion event.
-    ai4e_service.api_task_manager.CompleteTask(taskId, json.dumps(result)) 
 
 # POST, Blocking
 @ai4e_service.api_sync_func(
@@ -244,17 +205,7 @@ def get_classes(*args, **kwargs):
         "30":"whisker-sl",
         "31":"whisker-sr",
     }
-
     return json.dumps(classes)
-
-@ai4e_service.api_sync_func(
-    api_path = '/linc_test_me', 
-    methods = ['GET'],
-    maximum_concurrent_requests = 1000, 
-    trace_name = 'get:linc_test')
-def hello(*args, **kwargs):
-    return "!..........!"
-
 
 if __name__ == '__main__':
     app.run()
